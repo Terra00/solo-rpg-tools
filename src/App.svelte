@@ -1,30 +1,43 @@
 <script lang="ts">
-  import Counter from './lib/Counter.svelte'
+	import Card from './lib/Card.svelte';
+	let activeTab = $state('dice');
 </script>
 
-<main>
-  
-  <div class="card">
-    <Counter />
-  </div>
+<div class="main-layout">
+	<nav class="tabs">
+		<button class:active={activeTab === 'cards'} onclick={() => (activeTab = 'cards')}>
+			🃏 Card
+		</button>
+	</nav>
 
- 
-</main>
+	<main class="content-area">
+			<Card />
+	</main>
+</div>
 
 <style>
-  .logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: filter 300ms;
-  }
-  .logo:hover {
-    filter: drop-shadow(0 0 2em #646cffaa);
-  }
-  .logo.svelte:hover {
-    filter: drop-shadow(0 0 2em #ff3e00aa);
-  }
-  .read-the-docs {
-    color: #888;
-  }
+:global(:root) {
+		--bg-app: #18181b;
+		--bg-card: #27272a;
+		--bg-element: #3f3f46;
+		--bg-hover: #52525b;
+		--text-main: #f4f4f5;
+		--text-muted: #a1a1aa;
+		--accent: #e4e4e7;
+		--border: #3f3f46;
+	}
+
+	:global(body) {
+		background-color: var(--bg-app);
+		color: var(--text-main);
+		font-family:
+			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+		margin: 0;
+	}
+
+	main {
+		padding: 40px;
+		display: flex;
+		justify-content: center;
+	}
 </style>
