@@ -1,22 +1,30 @@
 <script lang="ts">
+	import Dice from './lib/Dice.svelte';
 	import Card from './lib/Card.svelte';
 	let activeTab = $state('dice');
 </script>
 
 <div class="main-layout">
 	<nav class="tabs">
+		<button class:active={activeTab === 'dice'} onclick={() => (activeTab = 'dice')}>
+			🎲 Dice
+		</button>
 		<button class:active={activeTab === 'cards'} onclick={() => (activeTab = 'cards')}>
 			🃏 Card
 		</button>
 	</nav>
 
 	<main class="content-area">
+		{#if activeTab === 'dice'}
+			<Dice />
+		{:else if activeTab === 'cards'}
 			<Card />
+		{/if}
 	</main>
 </div>
 
 <style>
-:global(:root) {
+	:global(:root) {
 		--bg-app: #18181b;
 		--bg-card: #27272a;
 		--bg-element: #3f3f46;
