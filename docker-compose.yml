@@ -1,0 +1,31 @@
+name: solo-rpg-tools
+
+services:
+  web:
+    build:
+      context: .
+      target: production
+    ports:
+      - '8080:80'
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/']
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Vite dev server with HMR. Started only with --profile dev.
+  dev:
+    build:
+      context: .
+      target: development
+    ports:
+      - '5173:5173'
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      # Needed for file watching on Windows/macOS bind mounts.
+      - CHOKIDAR_USEPOLLING=true
+    profiles:
+      - dev

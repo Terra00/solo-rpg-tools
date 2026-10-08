@@ -1,184 +1,169 @@
 <script lang="ts">
-	import pokerData from '../data/poker.json';
-	import tarotData from '../data/arcana.json';
-	type PlayableCard = {
-		id: string;
-		rank?: string;
-		suit: string;
-		name?: string;
-		color?: string;
-	};
-	type CardRecord = {
-		id: string;
-		rank?: string;
-		suit: string;
-		name?: string;
-		color?: string;
-		timestamp: Date;
-	};
+	import { DECK_OPTIONS, buildShuffledDeck, cardLabel, suitIcon } from './decks';
+	import { formatTime } from './format';
+	import { shuffle, uid } from './random';
+	import type { CardRecord, DeckType, PlayableCard } from './types';
 
-	type DeckType = 'poker' | 'poker-no-jocker' | 'tarot-full' | 'tarot-major';
+	interface Props {
+		onDraw?: (card: CardRecord, remaining: number) => void;
+		onDeckChange?: (remaining: number, total: number) => void;
+	}
 
-	let history: CardRecord[] = $state([]);
-	let nameDeck = $state('Choose a deck');
+	let { onDraw, onDeckChange }: Props = $props();
+
+	let deckType: DeckType | null = $state(null);
+	let deckName = $state('Scegli un mazzo');
 	let deck: PlayableCard[] = $state([]);
+	let initialSize = $state(0);
 	let currentCard: PlayableCard | null = $state(null);
+	let history: CardRecord[] = $state([]);
 
-	const getRawData = (type: DeckType) => {
-		switch (type) {
-			case 'poker':
-				return pokerData;
-
-			case 'poker-no-jocker':
-				return pokerData.filter((card) => card.suit !== 'none');
-
-			case 'tarot-full':
-				return tarotData;
-
-			case 'tarot-major':
-				return tarotData.filter((card) => card.suit === 'major');
-
-			default:
-				return [];
-		}
-	};
-	const shuffle = (array: any[]) => {
-		const newArray = [...array];
-		for (let i = newArray.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-		}
-		return newArray;
-	};
-
-	const suitIcons: Record<string, string> = {
-		hearts: '♥',
-		diamonds: '♦',
-		clubs: '♣',
-		spades: '♠',
-		none: '✷',
-		cups: '🏆',
-		pentacles: '🪙',
-		swords: '⚔️',
-		wands: '🥢',
-		major: '🔮'
-	};
-
-	const initDeck = (type: DeckType, name: string) => {
-		nameDeck = name;
+	function initDeck(type: DeckType, name: string): void {
+		deckType = type;
+		deckName = name;
 		currentCard = null;
-		const raw = getRawData(type);
-		const withIds = raw.map((c) => ({ ...c, id: crypto.randomUUID() }));
-		deck = shuffle(withIds);
-	};
+		deck = buildShuffledDeck(type);
+		initialSize = deck.length;
+		onDeckChange?.(deck.length, initialSize);
+	}
 
-	const drawCard = () => {
-		if (deck.length === 0) return;
+	function drawCard(): void {
 		const card = deck.pop();
-		if (card) {
-			currentCard = card;
-			const newRecord: CardRecord = {
-				id: crypto.randomUUID(),
-				rank: card.rank,
-				suit: card.suit,
-				name: card.name,
-				color: card.color,
-				timestamp: new Date()
-			};
+		if (!card) return;
+		// Reassign to trigger Svelte 5 reactivity on mutated array
+		deck = deck;
+		currentCard = card;
+		const record: CardRecord = {
+			id: uid(),
+			rank: card.rank,
+			suit: card.suit,
+			name: card.name,
+			color: card.color,
+			timestamp: Date.now()
+		};
+		history = [record, ...history];
+		onDraw?.(record, deck.length);
+		onDeckChange?.(deck.length, initialSize);
+	}
 
-			history = [newRecord, ...history];
-		}
-	};
+	function reshuffle(): void {
+		deck = shuffle(deck);
+	}
 
-	const formatTime = (date: Date) => {
-		return new Intl.DateTimeFormat('it-IT', {
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
-		}).format(date);
-	};
+	function resetAll(): void {
+		deck = [];
+		initialSize = 0;
+		currentCard = null;
+		history = [];
+		deckType = null;
+		deckName = 'Scegli un mazzo';
+		onDeckChange?.(0, 0);
+	}
+
+	function isSelected(type: DeckType): boolean {
+		return deckType === type;
+	}
 </script>
 
 <div class="panel-wrapper">
-	<div class="deck-controls">
-		<button onclick={() => initDeck('poker', 'Poker')}>Poker</button>
-		<button onclick={() => initDeck('poker-no-jocker', 'No joker')}>Poker No Joker</button>
-		<button onclick={() => initDeck('tarot-major', 'Major only')}>Tarot Major</button>
-		<button onclick={() => initDeck('tarot-full', 'Tarot')}>Tarot Full</button>
-	</div>
-
-	<div class="play-mat">
-		<div class="deck-slot">
-			{#if deck.length > 0}
-				<button class="card-back" onclick={drawCard}>
-					<span class="deck-count">{deck.length}</span>
-					<span class="click-hint">CLICK</span>
+	<div class="left-column">
+		<div class="deck-controls" role="group" aria-label="Scelta mazzo">
+			{#each DECK_OPTIONS as option (option.type)}
+				<button
+					type="button"
+					class:active={isSelected(option.type)}
+					aria-pressed={isSelected(option.type)}
+					onclick={() => initDeck(option.type, option.label)}
+				>
+					{option.label}
 				</button>
-			{:else}
-				<div class="empty-slot">Empty</div>
-			{/if}
-			<p class="label">{nameDeck}</p>
+			{/each}
 		</div>
 
-		<div class="arrow">➜</div>
-
-		<div class="hand-slot">
-			{#if currentCard}
-				<div class="card-face {currentCard.color || 'black'}">
-					<div class="corner top">
-						<span>{currentCard.rank || ''}</span>
-						<span>{suitIcons[currentCard.suit] || ''}</span>
-					</div>
-
-					<div class="center-content">
-						{#if currentCard.suit === 'major'}
-							<h3 class="major-title">{currentCard.name}</h3>
-							<span class="roman">{currentCard.rank}</span>
-						{:else}
-							<span class="big-icon">{suitIcons[currentCard.suit]}</span>
-							<span class="card-name">{currentCard.name}</span>
-						{/if}
-					</div>
-
-					<div class="corner bottom">
-						<span>{currentCard.rank || ''}</span>
-						<span>{suitIcons[currentCard.suit] || ''}</span>
-					</div>
-				</div>
-			{:else}
-				<div class="empty-placeholder">Draw a card...</div>
-			{/if}
-			<p class="label">hand</p>
-		</div>
-		<div class="card panel-right">
-			<div class="card-header">
-				<h3>History ({history.length})</h3>
-				<button class="btn-text" onclick={() => (history = [])}>Reset</button>
+		<div class="play-mat">
+			<div class="deck-slot">
+				{#if deck.length > 0}
+					<button
+						type="button"
+						class="card-back"
+						onclick={drawCard}
+						aria-label={`Pesca una carta. Rimaste ${deck.length} su ${initialSize}`}
+					>
+						<span class="deck-count" aria-hidden="true">{deck.length}/{initialSize}</span>
+						<span class="click-hint" aria-hidden="true">PESCA</span>
+					</button>
+				{:else}
+					<div class="empty-slot" role="status">Vuoto</div>
+				{/if}
+				<p class="label">{deckName}</p>
+				{#if deck.length > 1}
+					<button type="button" class="btn-text" onclick={reshuffle}>Rimescola rimaste</button>
+				{/if}
 			</div>
 
-			<div class="scroll-area">
-				{#each history as item (item.id)}
-					<div class="history-item">
-						<div class="history-top">
-							<span class="roll-desc">
-								{item.name || `${item.rank} ${suitIcons[item.suit]}`}
-							</span>
-							<span class="timestamp">{formatTime(item.timestamp)}</span>
+			<div class="arrow" aria-hidden="true">➜</div>
+
+			<div class="hand-slot">
+				{#if currentCard}
+					<div class="card-face {currentCard.color ?? 'black'}">
+						<div class="corner top">
+							<span>{currentCard.rank ?? ''}</span>
+							<span aria-hidden="true">{suitIcon(currentCard.suit)}</span>
 						</div>
 
-						<div class="history-main">
-							<span class="mini-card-text {item.color || 'black'}">
-								{suitIcons[item.suit]}
-								{item.rank || ''}
-							</span>
+						<div class="center-content">
+							{#if currentCard.suit === 'major'}
+								<h3 class="major-title">{currentCard.name}</h3>
+								<span class="roman">{currentCard.rank}</span>
+							{:else}
+								<span class="big-icon" aria-hidden="true">{suitIcon(currentCard.suit)}</span>
+								<span class="card-name">{currentCard.name}</span>
+							{/if}
 						</div>
+
+						<div class="corner bottom" aria-hidden="true">
+							<span>{currentCard.rank ?? ''}</span>
+							<span>{suitIcon(currentCard.suit)}</span>
+						</div>
+						<span class="sr-only">{cardLabel(currentCard)}</span>
 					</div>
 				{:else}
-					<div class="empty-state">No cards drawn</div>
-				{/each}
+					<div class="empty-placeholder">Pesca una carta…</div>
+				{/if}
+				<p class="label">Mano</p>
 			</div>
 		</div>
 	</div>
+
+	<section class="card panel-right" aria-labelledby="cards-history-title">
+		<div class="card-header">
+			<h3 id="cards-history-title">Storico ({history.length})</h3>
+			<button type="button" class="btn-text" disabled={history.length === 0} onclick={resetAll}>
+				Azzera
+			</button>
+		</div>
+
+		<div class="scroll-area" aria-live="polite">
+			{#each history as item (item.id)}
+				<article class="history-item">
+					<div class="history-top">
+						<span class="roll-desc">{cardLabel(item)}</span>
+						<time class="timestamp" datetime={new Date(item.timestamp).toISOString()}>
+							{formatTime(item.timestamp)}
+						</time>
+					</div>
+					<div class="history-main">
+						<span class="mini-card-text {item.color ?? 'black'}" aria-hidden="true">
+							{suitIcon(item.suit)}
+							{item.rank ?? ''}
+						</span>
+					</div>
+				</article>
+			{:else}
+				<p class="empty-state">Nessuna carta pescata</p>
+			{/each}
+		</div>
+	</section>
 </div>
 
 <style>
@@ -188,61 +173,77 @@
 		justify-content: center;
 		align-items: flex-start;
 		flex-wrap: wrap;
-		gap: 40px;
+		gap: 2.5rem;
 		width: 100%;
 	}
 	.left-column {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 20px;
+		gap: 1.25rem;
 	}
 	.panel-right {
-		min-width: 300px;
-		max-width: 300px;
+		min-width: 18.75rem;
+		max-width: 18.75rem;
 	}
 	.deck-controls {
 		display: flex;
-		gap: 10px;
-		margin-bottom: 20px;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.625rem;
+		margin-bottom: 1.25rem;
 	}
 	.deck-controls button {
-		padding: 8px 16px;
-		background: #333;
-		color: white;
-		border: 1px solid #555;
+		padding: 0.5rem 1rem;
+		background: var(--bg-element);
+		color: var(--text-main);
+		border: 1px solid var(--border);
 		cursor: pointer;
-		border-radius: 4px;
+		border-radius: 0.25rem;
+	}
+	.deck-controls button:hover {
+		background: var(--bg-hover);
+	}
+	.deck-controls button.active {
+		background: var(--primary);
+		border-color: var(--primary);
+		color: white;
 	}
 
 	.play-mat {
 		display: flex;
+		align-items: flex-start;
+		gap: 2.5rem;
+	}
+
+	.deck-slot,
+	.hand-slot {
+		display: flex;
+		flex-direction: column;
 		align-items: center;
-		gap: 40px;
 	}
 
 	.label {
 		text-align: center;
-		color: #888;
-		margin-top: 10px;
+		color: var(--text-muted);
+		margin-top: 0.625rem;
 		font-size: 0.8rem;
 		letter-spacing: 1px;
 	}
 	.arrow {
 		font-size: 2rem;
-		color: #555;
+		color: var(--text-muted);
+		padding-top: 4.5rem;
 	}
 
 	.card-back {
-		width: 140px;
-		height: 200px;
-		border-radius: 10px;
+		width: 8.75rem;
+		height: 12.5rem;
+		border-radius: 0.625rem;
 		border: 2px solid #fff;
 		cursor: pointer;
 		position: relative;
-
 		background: repeating-linear-gradient(45deg, #a93c3c, #a93c3c 10px, #7f2828 10px, #7f2828 20px);
-
 		box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.5);
 		transition: transform 0.1s;
 		display: flex;
@@ -257,8 +258,8 @@
 	.deck-count {
 		background: white;
 		color: black;
-		padding: 4px 8px;
-		border-radius: 12px;
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.75rem;
 		font-weight: bold;
 		font-size: 0.9rem;
 		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -266,29 +267,30 @@
 
 	.click-hint {
 		position: absolute;
-		bottom: 10px;
+		bottom: 0.625rem;
 		color: rgba(255, 255, 255, 0.7);
 		font-size: 0.8rem;
+		letter-spacing: 1px;
 	}
 
 	.empty-slot {
-		width: 140px;
-		height: 200px;
-		border: 2px dashed #444;
-		border-radius: 10px;
+		width: 8.75rem;
+		height: 12.5rem;
+		border: 2px dashed var(--border);
+		border-radius: 0.625rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: #555;
+		color: var(--text-muted);
 	}
 
 	.card-face {
-		width: 140px;
-		height: 200px;
+		width: 8.75rem;
+		height: 12.5rem;
 		background: #e6e6e6;
-		border-radius: 10px;
+		border-radius: 0.625rem;
 		position: relative;
-		padding: 10px;
+		padding: 0.625rem;
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
@@ -320,9 +322,6 @@
 		color: #d4af37;
 		border: 1px solid #d4af37;
 	}
-	.card-face.gold .corner {
-		border-color: #d4af37;
-	}
 
 	.corner {
 		display: flex;
@@ -350,7 +349,7 @@
 	}
 	.card-name {
 		font-size: 0.8rem;
-		margin-top: 5px;
+		margin-top: 0.3125rem;
 		font-family: serif;
 	}
 
@@ -362,75 +361,81 @@
 	}
 	.roman {
 		font-size: 1.5rem;
-		margin-top: 5px;
+		margin-top: 0.3125rem;
 		font-weight: bold;
 	}
 
 	.empty-placeholder {
-		width: 140px;
-		height: 200px;
+		width: 8.75rem;
+		height: 12.5rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: #666;
+		color: var(--text-muted);
 		font-style: italic;
 		font-size: 0.9rem;
+		text-align: center;
 	}
 
 	.card {
-		background-color: #27272a;
-		border: 1px solid #3f3f46;
-		border-radius: 12px;
-		padding: 24px;
-		width: 300px;
+		background-color: var(--bg-card);
+		border: 1px solid var(--border);
+		border-radius: 0.75rem;
+		padding: 1.5rem;
 		box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
 	}
 	.card-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 20px;
-		border-bottom: 1px solid #3f3f46;
-		padding-bottom: 10px;
+		margin-bottom: 1.25rem;
+		border-bottom: 1px solid var(--border);
+		padding-bottom: 0.625rem;
 	}
 	h3 {
 		margin: 0;
 		font-weight: 600;
 		font-size: 1.1rem;
-		color: #f4f4f5;
+		color: var(--text-main);
 	}
 	.btn-text {
 		background: none;
 		border: none;
-		color: #a1a1aa;
+		color: var(--text-muted);
 		cursor: pointer;
 		font-size: 0.8rem;
 		text-decoration: underline;
 	}
+	.btn-text:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+		text-decoration: none;
+	}
 
 	.scroll-area {
-		max-height: 400px;
+		max-height: 25rem;
 		overflow-y: auto;
-		padding-right: 5px;
+		padding-right: 0.3125rem;
 	}
 	.history-item {
-		background: #18181b;
-		padding: 12px;
-		border-radius: 8px;
-		margin-bottom: 8px;
-		border-left: 3px solid #52525b;
+		background: var(--bg-app);
+		padding: 0.75rem;
+		border-radius: 0.5rem;
+		margin-bottom: 0.5rem;
+		border-left: 3px solid var(--bg-hover);
 	}
 
 	.history-top {
 		display: flex;
 		justify-content: space-between;
+		gap: 0.5rem;
 		font-size: 0.85rem;
-		color: #a1a1aa;
-		margin-bottom: 4px;
+		color: var(--text-muted);
+		margin-bottom: 0.25rem;
 	}
 	.roll-desc {
 		font-weight: bold;
-		color: #e4e4e7;
+		color: var(--text-main);
 	}
 	.history-main {
 		display: flex;
@@ -445,7 +450,7 @@
 		color: #ef4444;
 	}
 	.mini-card-text.black {
-		color: #a1a1aa;
+		color: var(--text-muted);
 	}
 	.mini-card-text.gold {
 		color: #fbbf24;
@@ -453,8 +458,27 @@
 
 	.empty-state {
 		text-align: center;
-		color: #a1a1aa;
-		padding: 20px;
+		color: var(--text-muted);
+		padding: 1.25rem;
 		font-style: italic;
+		margin: 0;
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+	}
+
+	@media (max-width: 640px) {
+		.play-mat {
+			gap: 1rem;
+		}
+		.arrow {
+			display: none;
+		}
 	}
 </style>
